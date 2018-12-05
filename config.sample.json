@@ -1,0 +1,16 @@
+{
+  "broker": {
+    "host": "localhost",
+    "username": "XXXXXXXX",
+    "password": "XXXXXXXX",
+    "modejson":true
+  },
+  "bridges": [
+    {
+      "host": "XXX.XXX.XXX.XXX",
+      "username": "XXXXXXXX",
+      "interval": 500,
+      "prefix": "hue"
+    }
+  ]
+}
