@@ -2,121 +2,46 @@
 
 var mqtt    = require('mqtt');
 var extend  = require('deep-extend');
-var equal   = require('equals');
 var config  = require('./config.json');
+var path = require("path");
 
+const NodeCache = require( "node-cache" );
+
+
+var devices = {};
+  
 config = extend({
-  bridges: [],
-  broker: {
+  broker:{
     host: 'localhost',
     username: '',
     password: '',
-    modejson: true
+    clientId: 'mqtt-bt-presence', 
+    port: 1883, 
+    keepalive : 60
   },
+  topics:{
+    input: '',
+    output: '',
+  },
+  cache:{
+    stdTTL: 120,                   //the standard ttl as number in seconds for every generated cache element. 0 = unlimited
+    checkperiod: 5,               //The period in seconds, as a number, used for the automatic delete check interval. 0 = no periodic check.
+    errorOnMissing: false,        //en/disable throwing or passing an error to the callback if attempting to .get a missing or expired value.
+		useClones: true,              //en/disable cloning of variables. If true you'll get a copy of the cached variable. If false you'll save and get just the reference. Note: true is recommended, because it'll behave like a server-based caching. You should set false if you want to save mutable objects or other complex types with mutability involved and wanted. Here's a simple code exmaple showing the different behavior
+		deleteOnExpire: true          //whether variables will be deleted automatically when they expire. If true the variable will be deleted. If false the variable will remain. You are encouraged to handle the variable upon the event expired by yourself.
+  }
 }, config);
 
+const myCache = new NodeCache(config.cache);
+
+/*
 if (undefined === config.bridges || !config.bridges.length) {
   console.error('No Philips Hue bridges are configured. Please configure a bridge and try again.');
   process.exit(1);
 }
-
+*/
 function slugify(value) {
-  return value.toString().toLowerCase().replace(/[ \.\-\/\\]/g, '_').replace(/[^a-z0-9_]/g, '');
-}
-
-function startPolling() {
-  config.bridges.forEach(function(bridge, index) {
-    if (!bridge || undefined === bridge.host || !bridge.host) {
-      console.error('Cannot poll Hue bridge: missing required argument "host"');
-      process.exit(1);
-    }
-
-    if (undefined === bridge.username || !bridge.username) {
-      console.error('Cannot poll Hue bridge %s: missing required argument "username"', bridge.host);
-      process.exit(1);
-    }
-
-    bridge.id       = index;
-    bridge.interval = bridge.interval || 1000;
-    bridge.polling  = false;
-    bridge.prefix   = bridge.prefix || 'hue';
-    bridge.sensors  = {};
-    bridge.skipped  = false;
-    bridge.modejson = true;
-
-    console.log('Polling Hue bridge %s every %dms', bridge.host, bridge.interval);
-
-    bridge.timer = setInterval(pollSensors, bridge.interval, bridge);
-    pollSensors(bridge);
-  });
-}
-
-function pollSensors(_bridge) {
-  var bridge = _bridge;
-
-  if (bridge.polling) {
-    if (!bridge.skipped) {
-      bridge.skipped = true;
-      console.log('Polling skipped on Hue bridge %s. Consider raising your polling interval.', bridge.host);
-    }
-    return false;
-  }
-
-  bridge.polling = true;
-
-  var opts = {
-    method: 'GET',
-    uri: 'http://' + bridge.host + '/api/' + bridge.username + '/sensors',
-    json: true
-  };
-
-  request(opts, function(err, res, body) {
-    if (err) {
-      bridge.polling = false;
-      return console.error('Error polling sensors on Hue bridge %s: %s', bridge.host, err.toString());
-    }
-
-    var sensors = body;
-
-    Object.keys(sensors).forEach(function(id) {
-      var sensorA = sensors[id];
-      var sensorB = bridge.sensors[id];
-
-      if (undefined !== sensorA.error) {
-        bridge.polling = false;
-        return console.error('Error polling sensors on Hue bridge %s: %s', bridge.host, sensorA.error.description);
-      }
-
-      if (undefined !== sensorB && !equal(sensorA, sensorB)) {
-        var nameSlug = slugify(sensorA.name);
-        var topic = bridge.prefix + '/' + nameSlug;
-
-        if(bridge.modejson) {
-          var payload = {}
-          Object.keys(sensorA.state).forEach(function(key) {
-            payload[slugify(key)] = sensorA.state[key];
-          });
-          client.publish(topic, JSON.stringify(payload));
-           // console.log('%s %s', topic, JSON.stringify(payload));
-        } else {
-
-          Object.keys(sensorA.state).forEach(function(key) {
-            var keySlug = slugify(key);
-            var topic = bridge.prefix + '/' + nameSlug + '/' + keySlug;
-            var payload = sensorA.state[key];
-
-            // console.log('%s %s', topic, payload.toString());
-            client.publish(topic, payload.toString());
-          });
-        }
-
-      }
-
-      bridge.sensors[id] = sensorA;
-    });
-
-    bridge.polling = bridge.skipped = false;
-  });
+  return value.toString().toLowerCase().replace(/:/g, '')
 }
 
 // Exit handling to disconnect client
@@ -131,16 +56,83 @@ process.on('SIGINT', exitHandler);
 
 var client = mqtt.connect(config.broker);
 
-client.on('connect', function() {
-  startPolling();
-});
+client.on('connect', mqtt_connect);
+client.on('reconnect', mqtt_reconnect);
+client.on('error', mqtt_error);
+client.on('message', mqtt_messsageReceived);
+client.on('close', mqtt_error);
 
-client.on('error', function(err) {
+function mqtt_connect(){ 
+  console.log("Connecting MQTT"); 
+  client.subscribe(config.topics.input, mqtt_subscribe);
+}
+
+function mqtt_reconnect(err){ 
+  console.log("Reconnect MQTT"); 
+  if (err) {mqtt_error(err);} 
+  client = mqtt.connect(config.broker);
+}
+
+function mqtt_error(err) {
   if (err)
     return console.error('MQTT Error: %s', err.toString());
-});
+}
 
-client.on('close', function(err) {
-  if (err)
-    return console.error('MQTT Error: %s', err.toString());
-});
+function mqtt_subscribe(err, granted){ 
+  console.log("Subscribed to " + config.topics.input); 
+  if (err) {console.log(err);}
+  }
+
+function after_publish(){ 
+  //do nothing
+  }
+
+  //home/home_presence/Garage : 
+  //"{"id":"94:65:2d:c4:5b:6e","name":"INTRA-MOB09","rssi":-84,"distance":13.66931}"
+  
+function mqtt_messsageReceived(topic, message, packet){ 
+    //console.log('Topic=' + topic + ' Message=' + message);
+    var dist_change = true;
+    var room = path.basename(topic);
+
+    message = JSON.parse(message);
+    var device_id = slugify(message.id);
+    message.room = path.basename(topic);
+
+
+    if (!devices[device_id]) {
+      devices[device_id] = {};
+      devices[device_id].id = message.id;
+      if(message.name){
+        devices[device_id].name=message.name;
+      }
+      devices[device_id].room = {};
+    } 
+    if (devices[device_id].room[room]) {
+      dist_change = Math.abs(message.rssi - devices[device_id].room[room].rssi) >= 2; 
+    } else {
+      myCache.set(device_id+"_"+room, {id:device_id,room:room});
+    }
+
+    devices[device_id].room[room] = {rssi:message.rssi , distance: message.distance};
+    myCache.set(device_id+"_"+room, {id:device_id,room:room});
+    myCache.ttl( device_id+"_"+room);
+
+    if(dist_change) {publish_device(device_id);}
+  }
+
+  function publish_device(device_id){
+    var topic = config.topics.output + '/' + device_id;
+    var payload = JSON.stringify(devices[device_id]);
+    //console.log('Topic=' + topic + ' Message=' + payload);
+    client.publish(topic, payload);
+  }
+
+  myCache.on("expired", function( key, value ){
+    console.log('delete :' +  value.id +" - " + value.room);
+    delete devices[value.id].room[value.room];
+    publish_device(value.id);
+    if (Object.keys(devices[value.id].room).length==0) {
+      delete devices[value.id];
+    }
+  });

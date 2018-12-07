@@ -13,8 +13,7 @@
     "type": "git",
     "url": "https://github.com/AntorFr/mqtt-bt-presence.git"
   },
-  "keywords": [
-  ],
+  "keywords": [],
   "author": "AntorFR <contact@antor.fr>",
   "license": "MIT",
   "bugs": {
@@ -24,7 +23,9 @@
   "dependencies": {
     "deep-extend": "^0.6.0",
     "equals": "^1.0.5",
-    "mqtt": "^1.18.0",
-    "redis":"^2.8.0"
+    "mqtt": "^2.18.8",
+    "redis": "^2.8.0",
+    "node-cache": "^4.2.0",
+    "bufferutil": "^4.0.0"
   }
 }
