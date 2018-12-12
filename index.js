@@ -22,6 +22,7 @@ config = extend({
   topics:{
     input: '',
     output: '',
+    learning: 'home/home_presence_learning'
   },
   cache:{
     stdTTL: 120,                   //the standard ttl as number in seconds for every generated cache element. 0 = unlimited
@@ -65,6 +66,7 @@ client.on('close', mqtt_error);
 function mqtt_connect(){ 
   console.log("Connecting MQTT"); 
   client.subscribe(config.topics.input, mqtt_subscribe);
+  client.subscribe(config.topics.learning, mqtt_subscribe);
 }
 
 function mqtt_reconnect(err){ 
@@ -79,7 +81,7 @@ function mqtt_error(err) {
 }
 
 function mqtt_subscribe(err, granted){ 
-  console.log("Subscribed to " + config.topics.input); 
+  console.log("Subscribed to channels"); 
   if (err) {console.log(err);}
   }
 
@@ -91,6 +93,43 @@ function after_publish(){
   //"{"id":"94:65:2d:c4:5b:6e","name":"INTRA-MOB09","rssi":-84,"distance":13.66931}"
   
 function mqtt_messsageReceived(topic, message, packet){ 
+    switch (true) {
+      case topic.includes(config.topics.learning):
+        return compute_learning_message(message)
+      default:
+        return compute_bt_presence(topic,message);
+    }
+
+  }
+
+function compute_learning_message(message){
+  message = JSON.parse(message);
+  var device_id = slugify(message.id);
+
+  create_device(message);
+
+  if (message.learning_room) {
+    devices[device_id].learning_room = message.learning_room;
+  } else {
+    devices[device_id].learning_room = undefined;
+  }
+
+}
+
+//Create device if needed
+function create_device(device){
+  var device_id = slugify(device.id);
+  if (!devices[device_id]) {
+    devices[device_id] = {};
+    devices[device_id].id = device.id;
+    if(device.name){
+      devices[device_id].name=device.name;
+    }
+    devices[device_id].room = {};
+  } 
+}
+
+function compute_bt_presence(topic,message){
     //console.log('Topic=' + topic + ' Message=' + message);
     var dist_change = true;
     var room = path.basename(topic);
@@ -99,15 +138,8 @@ function mqtt_messsageReceived(topic, message, packet){
     var device_id = slugify(message.id);
     message.room = path.basename(topic);
 
+    create_device(message);
 
-    if (!devices[device_id]) {
-      devices[device_id] = {};
-      devices[device_id].id = message.id;
-      if(message.name){
-        devices[device_id].name=message.name;
-      }
-      devices[device_id].room = {};
-    } 
     if (devices[device_id].room[room]) {
       dist_change = Math.abs(message.rssi - devices[device_id].room[room].rssi) >= 2; 
     } else {
@@ -119,6 +151,7 @@ function mqtt_messsageReceived(topic, message, packet){
     myCache.ttl( device_id+"_"+room);
 
     if(dist_change) {publish_device(device_id);}
+
   }
 
   function publish_device(device_id){
