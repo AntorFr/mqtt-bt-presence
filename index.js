@@ -71,8 +71,10 @@ function mqtt_connect(){
 
 function mqtt_reconnect(err){ 
   console.log("Reconnect MQTT"); 
-  if (err) {mqtt_error(err);} 
-  client = mqtt.connect(config.broker);
+  if (err) {
+    mqtt_error(err);
+    client = mqtt.connect(config.broker);
+  } 
 }
 
 function mqtt_error(err) {
@@ -94,7 +96,7 @@ function after_publish(){
   
 function mqtt_messsageReceived(topic, message, packet){ 
     switch (true) {
-      case topic.includes(config.topics.learning):
+      case (topic.includes(config.topics.learning)):
         return compute_learning_message(message)
       default:
         return compute_bt_presence(topic,message);
@@ -122,11 +124,11 @@ function create_device(device){
   if (!devices[device_id]) {
     devices[device_id] = {};
     devices[device_id].id = device.id;
-    if(device.name){
-      devices[device_id].name=device.name;
-    }
     devices[device_id].room = {};
   } 
+  if(device.name){
+    devices[device_id].name=device.name;
+  }
 }
 
 function compute_bt_presence(topic,message){
@@ -150,7 +152,9 @@ function compute_bt_presence(topic,message){
     myCache.set(device_id+"_"+room, {id:device_id,room:room});
     myCache.ttl( device_id+"_"+room);
 
-    if(dist_change) {publish_device(device_id);}
+    if(dist_change) {
+      publish_device(device_id);
+      }
 
   }
 
@@ -162,7 +166,7 @@ function compute_bt_presence(topic,message){
   }
 
   myCache.on("expired", function( key, value ){
-    console.log('delete :' +  value.id +" - " + value.room);
+    //console.log('delete :' +  value.id +" - " + value.room);
     delete devices[value.id].room[value.room];
     publish_device(value.id);
     if (Object.keys(devices[value.id].room).length==0) {
