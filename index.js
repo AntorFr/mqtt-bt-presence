@@ -3,10 +3,9 @@
 var mqtt    = require('mqtt');
 var extend  = require('deep-extend');
 var config  = require('./config.json');
-var path = require("path");
+var path    = require("path");
 
 const NodeCache = require( "node-cache" );
-
 
 var devices = {};
   
@@ -128,6 +127,9 @@ function create_device(device){
   } 
   if(device.name){
     devices[device_id].name=device.name;
+  }
+  if(device.bt_type){
+    devices[device_id].bt_type=device.bt_type;
   }
 }
 
