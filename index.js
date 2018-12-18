@@ -120,11 +120,14 @@ function compute_learning_message(message){
 
 //Create device if needed
 function create_device(device){
+  var exist = true;
+
   var device_id = slugify(device.id);
   if (!devices[device_id]) {
     devices[device_id] = {};
     devices[device_id].id = device.id;
     devices[device_id].room = {};
+    exist = false;
   } 
   if(device.name){
     devices[device_id].name=device.name;
@@ -132,6 +135,8 @@ function create_device(device){
   if(device.bt_type){
     devices[device_id].bt_type=device.bt_type;
   }
+
+  return (!exist);
 }
 
 function compute_bt_presence(topic,message){
@@ -143,22 +148,21 @@ function compute_bt_presence(topic,message){
     var device_id = slugify(message.id);
     message.room = path.basename(topic);
 
-    create_device(message);
+    if (create_device(message)) {
+      publish_detection(devices[device_id],true);
+    }
 
     if (devices[device_id].room[room]) {
-      dist_change = Math.abs(message.rssi - devices[device_id].room[room].rssi) >= 2; 
-    } else {
-      myCache.set(device_id+"_"+room, {id:device_id,room:room});
-    }
+      dist_change = Math.abs(message.rssi - devices[device_id].room[room].rssi) >= 3; 
+    } 
 
     devices[device_id].room[room] = {rssi:message.rssi , distance: message.distance};
     myCache.set(device_id+"_"+room, {id:device_id,room:room});
-    myCache.ttl( device_id+"_"+room);
+    myCache.ttl(device_id+"_"+room);
 
     if(dist_change) {
       publish_device(device_id);
       }
-
   }
 
   function publish_device(device_id){
@@ -168,11 +172,22 @@ function compute_bt_presence(topic,message){
     client.publish(topic, payload);
   }
 
+  function publish_detection(device,status){
+    var topic = config.topics.detection + '/' + slugify(device.id);
+    var payload = JSON.parse(JSON.stringify(device));
+    payload.room = undefined;
+    payload.status = (status? 'present' : 'away');
+    payload = JSON.stringify(payload);
+    //console.log('Topic=' + topic + ' Message=' + payload);
+    client.publish(topic, payload);
+  }
+
   myCache.on("expired", function( key, value ){
     //console.log('delete :' +  value.id +" - " + value.room);
     delete devices[value.id].room[value.room];
     publish_device(value.id);
     if (Object.keys(devices[value.id].room).length==0) {
+      publish_detection(devices[value.id],false);
       delete devices[value.id];
     }
   });
