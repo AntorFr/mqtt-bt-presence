@@ -20,9 +20,10 @@ config = extend({
     keepalive : 60
   },
   topics:{
-    input: '',
-    output: '',
-    learning: 'home/home_presence_learning'
+    input: '/home/home_presence/#',
+    output: 'home/BT/presence',
+    learning: 'home/home_presence_learning',
+    detection: 'home/BT/detection',
   },
   cache:{
     stdTTL: 120,                   //the standard ttl as number in seconds for every generated cache element. 0 = unlimited
