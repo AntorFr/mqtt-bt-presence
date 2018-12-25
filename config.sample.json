@@ -1,16 +1,13 @@
 {
   "broker": {
-    "host": "localhost",
-    "username": "XXXXXXXX",
-    "password": "XXXXXXXX",
-    "modejson":true
-  },
-  "bridges": [
-    {
-      "host": "XXX.XXX.XXX.XXX",
+      "host": "XXXXXXX",
       "username": "XXXXXXXX",
-      "interval": 500,
-      "prefix": "hue"
-    }
-  ]
+      "password": "XXXXXXXX"
+  },
+  "topics":{
+    "input": "home/home_presence/#",
+    "output": "home/BT/presence",
+    "learning" : "home/home_presence_learning",
+    "detection" : "'home/BT/detection"
+  }
 }
